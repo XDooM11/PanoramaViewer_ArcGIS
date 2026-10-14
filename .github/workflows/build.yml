@@ -3,14 +3,15 @@ name: Build Panorama Viewer
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
  
 permissions:
   contents: read
  
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2025-vs2026
  
     steps:
       - name: Download source code
@@ -21,20 +22,27 @@ jobs:
         with:
           dotnet-version: '10.0.x'
  
+      - name: Configure Visual Studio MSBuild
+        uses: microsoft/setup-msbuild@v2
+        with:
+          msbuild-architecture: x64
+ 
       - name: Restore dependencies
         run: dotnet restore PanoramaViewer.csproj
  
-      - name: Build Panorama Viewer
-        run: dotnet build PanoramaViewer.csproj --configuration Release --no-restore
+      - name: Build ArcGIS Pro add-in
+        run: msbuild PanoramaViewer.csproj /p:Configuration=Release /verbosity:minimal
  
       - name: Find ArcGIS Pro add-in
         shell: pwsh
         run: |
-          $items = @(Get-ChildItem -Path PanoramaViewer -Recurse -Filter '*.esriAddInX' -File)
+          $items = @(Get-ChildItem -Path . -Recurse -Filter '*.esriAddInX' -File)
+ 
           if ($items.Count -eq 0) {
             Write-Error 'No installable .esriAddInX was generated.'
             exit 1
           }
+ 
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Copy-Item $items[0].FullName dist/PanoramaViewer.esriAddInX
  
