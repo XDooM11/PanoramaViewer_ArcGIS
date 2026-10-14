@@ -1,0 +1,26 @@
+<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mapy.com Panorama</title><style>
+html,body{height:100%;margin:0;background:#0d192b;color:#e6f0fc;font:14px 'Segoe UI',Arial,sans-serif}
+#root{position:absolute;inset:0}#hint{position:absolute;z-index:10;left:14px;top:14px;max-width:450px;background:rgba(10,25,44,.9);padding:12px 16px;border-radius:10px;box-shadow:0 4px 18px #0004}
+#hint.ok{opacity:.7}#hint.error{background:#742e34}
+</style></head><body><div id="root"></div><div id="hint">Čekám na výběr místa v ArcGIS Pro…</div>
+<script src="https://api.mapy.com/js/panorama/v1/panorama.js"></script>
+<script>
+let active=null;let seq=0;
+const hint=document.getElementById('hint');
+function status(text,kind){hint.textContent=text;hint.className=kind||'';window.chrome?.webview?.postMessage({status:text});}
+async function loadPano(data){
+ const id=++seq;
+ if(active){try{active.destroy?.()}catch(e){} active=null}
+ document.getElementById('root').replaceChildren();
+ status('Hledám nejbližší panoramatický snímek…');
+ try{
+   if(typeof Panorama==='undefined') throw new Error('Nepodařilo se načíst Mapy.com Panorama API.');
+   const pano=await Panorama.panoramaFromPosition({parent:document.getElementById('root'),lon:data.lon,lat:data.lat,apiKey:data.apiKey,radius:data.radius||80,yaw:'point',showNavigation:true,lang:'cs'});
+   if(id!==seq){pano?.destroy?.();return}
+   active=pano;
+   status('Panorama načteno. Myší se rozhlížejte, šipkami přecházejte mezi snímky.','ok');
+ }catch(e){if(id===seq)status('Panorama není dostupné nebo API vrátilo chybu: '+(e?.message||String(e)),'error')}
+}
+window.chrome?.webview?.addEventListener('message',e=>{if(e.data?.type==='location')loadPano(e.data)});
+</script></body></html>

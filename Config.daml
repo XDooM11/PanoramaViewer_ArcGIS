@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ArcGIS defaultAssembly="PanoramaViewer.dll" defaultNamespace="PanoramaViewer" xmlns="http://schemas.esri.com/DADF/Registry">
+  <AddInInfo id="{5D4EA1BC-4E36-4D1A-A93C-2DBF14786B6C}" version="1.0.0" desktopVersion="3.7.0">
+    <Name>Panorama Viewer</Name>
+    <Description>Google Street View and Mapy.com Panorama for ArcGIS Pro.</Description>
+    <Image>Assets\panorama32.png</Image>
+    <Author>Panorama Viewer</Author>
+    <Company>Independent add-in</Company>
+    <Date>2026-10-14</Date>
+    <Subject>Mapping</Subject>
+  </AddInInfo>
+  <modules>
+    <insertModule id="PanoramaViewer_Module" className="Module1" autoLoad="false" caption="Panorama Viewer">
+      <tabs>
+        <tab id="PanoramaViewer_Tab" caption="Panorama" keytip="P">
+          <group refID="PanoramaViewer_Group" />
+        </tab>
+      </tabs>
+      <groups>
+        <group id="PanoramaViewer_Group" caption="360° panoramata" appearsOnAddInTab="false">
+          <tool refID="PanoramaViewer_GoogleTool" size="large" />
+          <tool refID="PanoramaViewer_MapyTool" size="large" />
+          <button refID="PanoramaViewer_SettingsButton" size="large" />
+        </group>
+      </groups>
+      <controls>
+        <tool id="PanoramaViewer_GoogleTool" caption="Google Street View" className="GoogleTool" loadOnClick="true" smallImage="Assets\google16.png" largeImage="Assets\google32.png" categoryRefID="esri_mapping_mapTools">
+          <tooltip heading="Google Street View">Klikněte na místo v mapě. Otevře se Street View.<disabledText /></tooltip>
+        </tool>
+        <tool id="PanoramaViewer_MapyTool" caption="Mapy.com Panorama" className="MapyTool" loadOnClick="true" smallImage="Assets\mapy16.png" largeImage="Assets\mapy32.png" categoryRefID="esri_mapping_mapTools">
+          <tooltip heading="Mapy.com Panorama">Klikněte na místo v mapě. Otevře se 360° panorama.<disabledText /></tooltip>
+        </tool>
+        <button id="PanoramaViewer_SettingsButton" caption="Nastavení" className="SettingsButton" loadOnClick="true" smallImage="Assets\settings16.png" largeImage="Assets\settings32.png">
+          <tooltip heading="API klíč">Nastavit API klíč Mapy.com.<disabledText /></tooltip>
+        </button>
+      </controls>
+    </insertModule>
+  </modules>
+</ArcGIS>
