@@ -31,13 +31,19 @@ internal sealed class PanoramaWindow : Window
     private string PageName => _provider == PanoramaProvider.Mapy ? "panorama.html" : "google.html";
     private string LocalPage => "https://panorama.local/" + PageName;
     private string BaseTitle => _provider == PanoramaProvider.Mapy
-        ? "Mapy.com Panorama \u2013 Panorama Viewer 1.1.1"
-        : "Google Street View \u2013 Panorama Viewer";
+        ? "Mapy.com Panorama \u2013 Panorama Viewer 1.2.0"
+        : "Google Street View \u2013 Panorama Viewer 1.2.0";
 
     internal PanoramaWindow(PanoramaProvider provider)
     {
         _provider = provider;
         _marker = new PanoramaPositionOverlay(provider);
+        _marker.Warning += message =>
+        {
+            if (_closed || Dispatcher.HasShutdownStarted) return;
+            _ = Dispatcher.InvokeAsync(() => { if (!_closed) SetStatus(message); });
+        };
+        StateChanged += (_, _) => _marker.SetSuspended(WindowState == WindowState.Minimized);
         Title = BaseTitle;
         Width = 1050; Height = 700; MinWidth = 550; MinHeight = 350;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -208,6 +214,29 @@ internal sealed class PanoramaWindow : Window
                     await ClearMarkerAsync();
                 }
             }
+            else if (type == "camera" && _pending is { } target)
+            {
+                // Acknowledge receipt, not a new camera command. At most one web
+                // tracking message can wait for the UI; the MCT pump is also bounded.
+                if (!root.TryGetProperty("seq", out var sequenceValue) ||
+                    !sequenceValue.TryGetInt64(out var sequence)) return;
+                try
+                {
+                    if (TryNumber(root, "lat", out var latitude) && TryNumber(root, "lon", out var longitude) &&
+                        Math.Abs(latitude) <= 90 && Math.Abs(longitude) <= 180)
+                    {
+                        double? heading = TryNumber(root, "heading", out var h) ? h : null;
+                        double? fov = TryNumber(root, "fov", out var f) && f > 0 ? f : null;
+                        _marker.UpdateCamera(target.View, latitude, longitude, heading, fov);
+                    }
+                }
+                finally
+                {
+                    if (!_closed && requestId == _requestId)
+                        _browser.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new
+                        { type = "camera-ack", requestId, seq = sequence }));
+                }
+            }
             else if (type == "position" && _pending is { } location &&
                      root.TryGetProperty("lat", out var latValue) && latValue.TryGetDouble(out var lat) &&
                      root.TryGetProperty("lon", out var lonValue) && lonValue.TryGetDouble(out var lon))
@@ -233,6 +262,13 @@ internal sealed class PanoramaWindow : Window
         {
             if (!_closed) SetStatus("Nepoda\u0159ilo se zpracovat zpr\u00e1vu z panoramy.");
         }
+    }
+
+    private static bool TryNumber(JsonElement root, string name, out double value)
+    {
+        value = double.NaN;
+        return root.TryGetProperty(name, out var item) && item.ValueKind == JsonValueKind.Number &&
+               item.TryGetDouble(out value) && double.IsFinite(value);
     }
 
     private async Task ClearMarkerAsync()

@@ -18,6 +18,7 @@ let generation = 0;
 let currentRequestId = null;
 let acceptingPositions = false;
 let authFailed = false;
+let currentPoint = null;
 const root = document.getElementById('root');
 function post(message) { window.chrome?.webview?.postMessage(message); }
 function report(requestId, state, message = '') { post({type:'status', requestId, state, message}); }
@@ -25,14 +26,68 @@ function validPoint(lat,lon) {
   return typeof lat === 'number' && typeof lon === 'number' &&
     Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
 }
+// BEGIN CAMERA REPORTER 1.2 -- identical in both HTML pages.
+// Event driven: max 10 messages/s, one in-flight message, latest snapshot wins.
+// An ACK from the host prevents a backlog if ArcGIS' UI thread is busy.
+function createCameraReporter(read, send) {
+  let timer = null, dirty = false, inFlight = null, last = null;
+  let lastAt = -Infinity, sequence = 0, disposed = false;
+  function schedule() {
+    if (disposed || !dirty || inFlight || timer !== null) return;
+    const wait = Math.max(0, 100 - (performance.now() - lastAt));
+    timer = setTimeout(flush, wait);
+  }
+  function flush() {
+    timer = null;
+    if (disposed || !dirty || inFlight) return;
+    dirty = false;
+    const snapshot = read();
+    if (!snapshot) return;
+    const signature = JSON.stringify(snapshot);
+    if (signature === last) return;
+    last = signature;
+    lastAt = performance.now();
+    inFlight = {requestId: snapshot.requestId, seq: ++sequence};
+    send({type:'camera', ...snapshot, seq:inFlight.seq});
+  }
+  return {
+    changed() { if (!disposed) { dirty = true; schedule(); } },
+    ack(message) {
+      if (!inFlight || message.requestId !== inFlight.requestId || message.seq !== inFlight.seq) return;
+      inFlight = null;
+      schedule();
+    },
+    reset() {
+      if (timer !== null) clearTimeout(timer);
+      timer = null; dirty = false; inFlight = null; last = null;
+      // Keep lastAt and sequence to maintain the rate limit across requests.
+    },
+    dispose() { this.reset(); disposed = true; }
+  };
+}
+// END CAMERA REPORTER 1.2
+
+// Google documents FOV=180,90,45,... for zoom=0,1,2,... .
+// This 2D sector is an orientation cue, not a 3D visibility footprint.
+function googleFov(zoom) {
+  return Number.isFinite(zoom) ? Math.max(1, Math.min(180, 180 / Math.pow(2, zoom))) : null;
+}
+const reporter = createCameraReporter(() => {
+  if (!panorama || !acceptingPositions || authFailed || !currentPoint || currentRequestId === null)
+    return null;
+  const pov = panorama.getPov();
+  const heading = Number.isFinite(pov?.heading) ? ((pov.heading % 360) + 360) % 360 : null;
+  return {requestId:currentRequestId, ...currentPoint, heading, fov:googleFov(panorama.getZoom())};
+}, post);
 function reportPosition(requestId, position) {
   const lat = position?.lat();
   const lon = position?.lng();
-  if (validPoint(lat,lon)) post({type:'position',requestId,lat,lon});
-  else post({type:'position-unavailable',requestId});
+  if (validPoint(lat,lon)) { currentPoint = {lat,lon}; reporter.changed(); }
+  else { currentPoint = null; reporter.reset(); post({type:'position-unavailable',requestId}); }
 }
 window.gm_authFailure = () => {
   authFailed = true;
+  reporter.reset(); currentPoint = null;
   acceptingPositions = false;
   if (currentRequestId !== null)
     report(currentRequestId,'error','Google odm\u00edtl API kl\u00ed\u010d. Zkontrolujte Maps JavaScript API, fakturaci a povolen\u00e9 weby.');
@@ -64,11 +119,14 @@ function createViewer() {
     panControl:true, zoomControl:true, fullscreenControl:true,
     enableCloseButton:false, motionTracking:false, motionTrackingControl:false
   });
+  panorama.addListener('pov_changed', () => reporter.changed());
+  panorama.addListener('zoom_changed', () => reporter.changed());
   // Keep Google's built-in attribution, copyrights, controls and links visible.
   panorama.addListener('position_changed', () => {
     if (!acceptingPositions || currentRequestId === null || authFailed) return;
-    const actualPosition = panorama.getLocation()?.latLng || panorama.getPosition();
-    reportPosition(currentRequestId, actualPosition);
+    const location = panorama.getLocation();
+    if (location?.pano && location.pano !== panorama.getPano()) return;
+    reportPosition(currentRequestId, location?.latLng || panorama.getPosition());
   });
   panorama.addListener('status_changed', () => {
     if (!acceptingPositions || currentRequestId === null || authFailed) return;
@@ -76,6 +134,7 @@ function createViewer() {
       report(currentRequestId,'ready');
       reportPosition(currentRequestId, panorama.getLocation()?.latLng || panorama.getPosition());
     } else {
+      currentPoint = null; reporter.reset();
       report(currentRequestId,'error','Na tomto m\u00edst\u011b nen\u00ed dostupn\u00e9 Google Street View.');
     }
   });
@@ -92,6 +151,7 @@ function heading(from, target) {
 }
 async function loadPano(data) {
   const id = ++generation;
+  reporter.reset(); currentPoint = null;
   currentRequestId = data.requestId;
   acceptingPositions = false;
   report(data.requestId,'loading','Hled\u00e1m nejbli\u017e\u0161\u00ed Google Street View\u2026');
@@ -123,14 +183,19 @@ async function loadPano(data) {
   } catch (_) {
     if (id !== generation || authFailed) return;
     acceptingPositions = false;
+    currentPoint = null; reporter.reset();
     panorama?.setVisible(false);
     report(data.requestId,'error','Street View se nepoda\u0159ilo na\u010d\u00edst. M\u016f\u017ee chyb\u011bt sn\u00edmek, p\u0159ipojen\u00ed nebo opr\u00e1vn\u011bn\u00ed API.');
   }
 }
 window.chrome?.webview?.addEventListener('message', event => {
   if (event.data?.type === 'location') void loadPano(event.data);
+  else if (event.data?.type === 'camera-ack') reporter.ack(event.data);
 });
-window.addEventListener('pagehide', () => { ++generation; acceptingPositions = false; });
+window.addEventListener('pagehide', () => {
+  ++generation; acceptingPositions = false; reporter.dispose();
+  if (panorama) google.maps.event.clearInstanceListeners(panorama);
+});
 post({type:'ready'});
 </script>
 </body>

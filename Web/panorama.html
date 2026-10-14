@@ -34,9 +34,73 @@ html, body {
 'use strict';
 let active = null;
 let generation = 0;
+let currentRequestId = null;
+let currentPoint = null;
+let currentCamera = null;
 const root = document.getElementById('root');
 function post(message) { window.chrome?.webview?.postMessage(message); }
 function report(requestId, state, message = '') { post({type:'status', requestId, state, message}); }
+
+// BEGIN CAMERA REPORTER 1.2 -- identical in both HTML pages.
+// Event driven: max 10 messages/s, one in-flight message, latest snapshot wins.
+// An ACK from the host prevents a backlog if ArcGIS' UI thread is busy.
+function createCameraReporter(read, send) {
+  let timer = null, dirty = false, inFlight = null, last = null;
+  let lastAt = -Infinity, sequence = 0, disposed = false;
+  function schedule() {
+    if (disposed || !dirty || inFlight || timer !== null) return;
+    const wait = Math.max(0, 100 - (performance.now() - lastAt));
+    timer = setTimeout(flush, wait);
+  }
+  function flush() {
+    timer = null;
+    if (disposed || !dirty || inFlight) return;
+    dirty = false;
+    const snapshot = read();
+    if (!snapshot) return;
+    const signature = JSON.stringify(snapshot);
+    if (signature === last) return;
+    last = signature;
+    lastAt = performance.now();
+    inFlight = {requestId: snapshot.requestId, seq: ++sequence};
+    send({type:'camera', ...snapshot, seq:inFlight.seq});
+  }
+  return {
+    changed() { if (!disposed) { dirty = true; schedule(); } },
+    ack(message) {
+      if (!inFlight || message.requestId !== inFlight.requestId || message.seq !== inFlight.seq) return;
+      inFlight = null;
+      schedule();
+    },
+    reset() {
+      if (timer !== null) clearTimeout(timer);
+      timer = null; dirty = false; inFlight = null; last = null;
+      // Keep lastAt and sequence to maintain the rate limit across requests.
+    },
+    dispose() { this.reset(); disposed = true; }
+  };
+}
+// END CAMERA REPORTER 1.2
+
+function readCamera(value) {
+  for (const camera of [value, value?.camera, value?.detail, value?.data]) {
+    if (camera && Number.isFinite(camera.yaw) && Number.isFinite(camera.fov) && camera.fov > 0) {
+      return {
+        heading: ((camera.yaw * 180 / Math.PI) % 360 + 360) % 360,
+        fov: Math.min(180, camera.fov * 180 / Math.PI)
+      };
+    }
+  }
+  return null;
+}
+const reporter = createCameraReporter(() => {
+  if (!active || !currentPoint || currentRequestId === null) return null;
+  // Read only. Never setCamera() in response to tracking/ACK/map updates.
+  try { currentCamera = readCamera(active.getCamera?.()) || currentCamera; } catch (_) {}
+  return {requestId:currentRequestId, ...currentPoint,
+    heading:currentCamera?.heading ?? null, fov:currentCamera?.fov ?? null};
+}, post);
+
 
 // The API documents lon/lat for panorama info. Event wrappers are normalised
 // defensively; never fall back to the clicked point or an old panorama position.
@@ -54,8 +118,9 @@ function readPosition(value) {
 }
 function position(requestId, value) {
   const point = readPosition(value);
-  if (point) post({type:'position', requestId, ...point});
-  else post({type:'position-unavailable', requestId});
+  currentPoint = point;
+  if (point) reporter.changed();
+  else { reporter.reset(); post({type:'position-unavailable', requestId}); }
 }
 function safeDestroy(panorama) { try { panorama?.destroy?.(); } catch (_) {} }
 function friendlyError(code) {
@@ -69,6 +134,8 @@ function friendlyError(code) {
 async function loadPano(data) {
   const id = ++generation;
   const requestId = data.requestId;
+  reporter.reset();
+  currentRequestId = requestId; currentPoint = null; currentCamera = null;
   safeDestroy(active);
   active = null;
   root.replaceChildren();
@@ -95,7 +162,14 @@ async function loadPano(data) {
     }
     active = panorama;
     report(requestId, 'ready');
+    try { currentCamera = readCamera(panorama.getCamera?.()); } catch (_) {}
     position(requestId, panorama.info);
+    panorama.addListener('pano-view', camera => {
+      if (id === generation && active === panorama) {
+        currentCamera = readCamera(camera) || currentCamera;
+        reporter.changed();
+      }
+    });
     panorama.addListener('pano-place', place => {
       if (id === generation && active === panorama) {
         // A position event only moves the map marker. It must not resize/reload
@@ -111,8 +185,9 @@ async function loadPano(data) {
 }
 window.chrome?.webview?.addEventListener('message', event => {
   if (event.data?.type === 'location') void loadPano(event.data);
+  else if (event.data?.type === 'camera-ack') reporter.ack(event.data);
 });
-window.addEventListener('pagehide', () => { ++generation; safeDestroy(active); active = null; });
+window.addEventListener('pagehide', () => { ++generation; reporter.dispose(); safeDestroy(active); active = null; });
 post({type:'ready'});
 </script>
 </body>
