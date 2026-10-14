@@ -31,7 +31,7 @@ jobs:
         run: dotnet restore PanoramaViewer.csproj
  
       - name: Build ArcGIS Pro add-in
-        run: msbuild PanoramaViewer.csproj /p:Configuration=Release /verbosity:minimal
+        run: msbuild PanoramaViewer.csproj /t:Rebuild /p:Configuration=Release /verbosity:normal
  
       - name: Find ArcGIS Pro add-in
         shell: pwsh
