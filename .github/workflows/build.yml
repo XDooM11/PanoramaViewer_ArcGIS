@@ -22,10 +22,10 @@ jobs:
           dotnet-version: '10.0.x'
  
       - name: Restore dependencies
-        run: dotnet restore PanoramaViewer/PanoramaViewer.csproj
+        run: dotnet restore PanoramaViewer.csproj
  
       - name: Build Panorama Viewer
-        run: dotnet build PanoramaViewer/PanoramaViewer.csproj --configuration Release --no-restore
+        run: dotnet build PanoramaViewer.csproj --configuration Release --no-restore
  
       - name: Find ArcGIS Pro add-in
         shell: pwsh
