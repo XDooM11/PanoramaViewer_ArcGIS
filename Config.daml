@@ -6,7 +6,7 @@
     <Image>Assets\panorama32.png</Image>
     <Author>Panorama Viewer</Author>
     <Company>Independent add-in</Company>
-    <Date>2026-10-14</Date>
+    <Date>2026-10-15</Date>
     <Subject>Mapping</Subject>
   </AddInInfo>
   <modules>
@@ -18,12 +18,18 @@
       </tabs>
       <groups>
         <group id="PanoramaViewer_Group" caption="360° panoramata" appearsOnAddInTab="false">
-          <tool refID="PanoramaViewer_GoogleTool" size="large" />
-          <tool refID="PanoramaViewer_MapyTool" size="large" />
+          <button refID="PanoramaViewer_GoogleToggleButton" size="large" />
+          <button refID="PanoramaViewer_MapyToggleButton" size="large" />
           <button refID="PanoramaViewer_SettingsButton" size="large" />
         </group>
       </groups>
       <controls>
+        <button id="PanoramaViewer_GoogleToggleButton" caption="Google Street View" className="GoogleToggleButton" loadOnClick="false" condition="esri_mapping_mapPane" smallImage="Assets\google16.png" largeImage="Assets\google32.png">
+          <tooltip heading="Google Street View">Kliknutím zapnete výběr místa v mapě. Dalším kliknutím na stejné tlačítko se vrátíte do Explore. Otevřená panoramata zůstanou zachovaná.<disabledText>Nejprve otevřete mapu.</disabledText></tooltip>
+        </button>
+        <button id="PanoramaViewer_MapyToggleButton" caption="Mapy.com Panorama" className="MapyToggleButton" loadOnClick="false" condition="esri_mapping_mapPane" smallImage="Assets\mapy16.png" largeImage="Assets\mapy32.png">
+          <tooltip heading="Mapy.com Panorama">Kliknutím zapnete výběr místa v mapě. Dalším kliknutím na stejné tlačítko se vrátíte do Explore. Otevřená panoramata zůstanou zachovaná.<disabledText>Nejprve otevřete mapu.</disabledText></tooltip>
+        </button>
         <tool id="PanoramaViewer_GoogleTool" caption="Google Street View" className="GoogleTool" loadOnClick="true" smallImage="Assets\google16.png" largeImage="Assets\google32.png" categoryRefID="esri_mapping_mapTools">
           <tooltip heading="Google Street View">Klikněte na místo v mapě. Otevře se Street View.<disabledText /></tooltip>
         </tool>
