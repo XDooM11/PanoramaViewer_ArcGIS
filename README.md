@@ -1,4 +1,4 @@
-# Panorama Viewer 1.1 – ArcGIS Pro 3.7
+# Panorama Viewer 1.2 – ArcGIS Pro 3.7
 
 Doplněk pro otevření Google Street View a Mapy.com Panorama podle místa vybraného v mapě.
 
@@ -28,3 +28,9 @@ Klíče lze kdykoliv změnit v **Panorama - Nastavení**. Uložení prázdného 
 - Integrovaná okna používají virtuální adresu `https://panorama.local/`. Případná doménová omezení musí tento host povolit; u Google nastavte webové omezení `https://panorama.local/` a API omezení na Maps JavaScript API.
 
 Synchronizace je navržena pro 2D mapy, nikoli 3D Scene.
+
+## Nové ve verzi 1.2
+
+- Tečka: 85% krytí. Výseč: 30% krytí, jemný obrys a středová čára.
+- Délka reaguje na měřítko mapy (cíl přibližně 48 obrazových bodů, obvykle 5-20 m). Při extrémním přiblížení dostává přednost omezení na obrazovce; při velkém oddálení se uplatní maximum 20 m.
+- Směr a FOV se přebírají z panoramatu; u Google se FOV odvozuje ze zoomu.
