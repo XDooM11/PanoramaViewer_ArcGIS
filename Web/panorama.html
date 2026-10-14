@@ -5,8 +5,26 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Mapy.com Panorama</title>
 <style>
-html,body,#root{width:100%;height:100%;margin:0;overflow:hidden;background:#17202b}
-.mount{position:absolute;inset:0}
+/* The viewport is determined by the window, never by canvas bitmap dimensions. */
+html, body {
+  width:100%; height:100%; margin:0; padding:0;
+  overflow:hidden; background:#17202b;
+}
+#root {
+  position:fixed; inset:0; width:100%; height:100%;
+  overflow:hidden; contain:strict;
+}
+.mount {
+  /* Keep the API's host bounded even if it sets an inline position/size. */
+  position:absolute !important; inset:0 !important;
+  width:100% !important; height:100% !important;
+  min-width:0; min-height:0; max-width:100%; max-height:100%;
+  padding:0; margin:0; border:0; box-sizing:border-box;
+  overflow:hidden; contain:strict;
+}
+.mount canvas {
+  display:block; max-width:100%; max-height:100%;
+}
 </style>
 </head>
 <body>
@@ -63,7 +81,10 @@ async function loadPano(data) {
     if (typeof Panorama === 'undefined') throw new Error('Library unavailable');
     const panorama = await Panorama.panoramaFromPosition({
       parent:mount, lon:data.lon, lat:data.lat, apiKey:data.apiKey,
-      radius:data.radius || 80, yaw:'point', showNavigation:true, lang:'cs'
+      radius:data.radius || 80, yaw:'point', pitch:0, fov:1.2,
+      showNavigation:true, lang:'cs'
+      // Only an initial FOV, in radians. Never reset it on pano-place/pano-view.
+      // The API's automatic window resizing stays enabled.
     });
     if (id !== generation) { safeDestroy(panorama); mount.remove(); return; }
     if (!panorama || (panorama.errorCode && panorama.errorCode !== 'NONE') || panorama.error) {
@@ -77,8 +98,8 @@ async function loadPano(data) {
     position(requestId, panorama.info);
     panorama.addListener('pano-place', place => {
       if (id === generation && active === panorama) {
-        // Actual location returned by the panorama, not the initial mouse click.
-        report(requestId, 'ready');
+        // A position event only moves the map marker. It must not resize/reload
+        // the viewer or reset its camera. Report 'ready' once, after creation.
         position(requestId, place);
       }
     });

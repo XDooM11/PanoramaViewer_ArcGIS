@@ -30,23 +30,30 @@ internal sealed class PanoramaWindow : Window
 
     private string PageName => _provider == PanoramaProvider.Mapy ? "panorama.html" : "google.html";
     private string LocalPage => "https://panorama.local/" + PageName;
+    private string BaseTitle => _provider == PanoramaProvider.Mapy
+        ? "Mapy.com Panorama \u2013 Panorama Viewer 1.1.1"
+        : "Google Street View \u2013 Panorama Viewer";
 
     internal PanoramaWindow(PanoramaProvider provider)
     {
         _provider = provider;
         _marker = new PanoramaPositionOverlay(provider);
-        Title = provider == PanoramaProvider.Mapy
-            ? "Mapy.com Panorama \u2013 Panorama Viewer"
-            : "Google Street View \u2013 Panorama Viewer";
+        Title = BaseTitle;
         Width = 1050; Height = 700; MinWidth = 550; MinHeight = 350;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         if (Application.Current?.MainWindow is Window owner) Owner = owner;
 
         var grid = new Grid();
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        grid.Children.Add(_status);
-        Grid.SetRow(_browser, 1);
+        if (provider != PanoramaProvider.Mapy)
+        {
+            // Leave the Google layout unchanged in this Mapy.com hotfix.
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            grid.Children.Add(_status);
+            Grid.SetRow(_browser, 1);
+        }
+        // For Mapy.com the browser always occupies the entire content area.
+        // Status text is shown in the title, so show/hide cannot trigger resizing.
         grid.Children.Add(_browser);
         Content = grid;
         Loaded += async (_, _) => await InitializeAsync();
@@ -79,6 +86,15 @@ internal sealed class PanoramaWindow : Window
             await _browser.EnsureCoreWebView2Async(environment);
             if (_closed) return;
             var core = _browser.CoreWebView2;
+            if (_provider == PanoramaProvider.Mapy)
+            {
+                // Browser/page zoom is separate from the panorama's own FOV.
+                // Keep page scale at 100%; ordinary panorama mouse-wheel zoom
+                // and drag/navigation handlers are not intercepted.
+                _browser.ZoomFactor = 1.0;
+                core.Settings.IsZoomControlEnabled = false;
+                core.Settings.IsPinchZoomEnabled = false;
+            }
             core.Settings.AreDevToolsEnabled = false;
             core.Settings.IsWebMessageEnabled = true;
             core.SetVirtualHostNameToFolderMapping("panorama.local", webDirectory,
@@ -228,6 +244,15 @@ internal sealed class PanoramaWindow : Window
     private void SetStatus(string? message)
     {
         if (_closed) return;
+        if (_provider == PanoramaProvider.Mapy)
+        {
+            // Updating the native title does not change the WebView viewport.
+            // Success is deliberately silent; errors/loading remain visible.
+            Title = string.IsNullOrWhiteSpace(message)
+                ? BaseTitle
+                : BaseTitle + " \u2014 " + message;
+            return;
+        }
         _status.Text = message ?? string.Empty;
         _status.Visibility = string.IsNullOrWhiteSpace(message) ? Visibility.Collapsed : Visibility.Visible;
     }
