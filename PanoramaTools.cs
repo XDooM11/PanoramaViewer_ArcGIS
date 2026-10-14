@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Globalization;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
@@ -13,6 +14,8 @@ namespace PanoramaViewer;
 
 internal abstract class PanoramaToolBase : MapTool
 {
+    private int _clickVersion;
+
     protected PanoramaToolBase()
     {
         IsSketchTool = false;
@@ -21,104 +24,114 @@ internal abstract class PanoramaToolBase : MapTool
 
     protected override void OnToolMouseDown(MapViewMouseButtonEventArgs e)
     {
-        if (e.ChangedButton == MouseButton.Left)
-            e.Handled = true;
+        if (e.ChangedButton == MouseButton.Left) e.Handled = true;
     }
 
     protected override async Task HandleMouseDownAsync(MapViewMouseButtonEventArgs e)
     {
+        if (e.ChangedButton != MouseButton.Left) return;
+        var version = Interlocked.Increment(ref _clickVersion);
         try
         {
             var view = MapView.Active;
-            if (view == null)
-                return;
-
+            if (view == null) return;
             var clientPoint = e.ClientPoint;
-
             var coordinates = await QueuedTask.Run(() =>
             {
-                var mapPoint = view.ClientToMap(clientPoint);
-                if (mapPoint == null)
-                    throw new InvalidOperationException("Nepodařilo se určit místo kliknutí v mapě.");
-
-                // Project returns new geometry; original map and layers remain unchanged.
-                var wgs84Point = GeometryEngine.Instance.Project(
-                    mapPoint, SpatialReferences.WGS84) as MapPoint;
-
-                if (wgs84Point == null)
-                    throw new InvalidOperationException("Nepodařilo se převést souřadnice do WGS 84.");
-
-                return (Latitude: wgs84Point.Y, Longitude: wgs84Point.X);
+                var point = view.ClientToMap(clientPoint);
+                if (point == null || point.IsEmpty || point.SpatialReference == null)
+                    throw new InvalidOperationException("Nelze ur\u010dit polohu kliknut\u00ed v map\u011b.");
+                // Project returns new geometry; no map or layer is modified.
+                var wgs84 = GeometryEngine.Instance.Project(point, SpatialReferences.WGS84) as MapPoint;
+                if (wgs84 == null || wgs84.IsEmpty)
+                    throw new InvalidOperationException("P\u0159evod sou\u0159adnic do WGS 84 se nezda\u0159il.");
+                return (Latitude: wgs84.Y, Longitude: wgs84.X);
             });
+            if (version != Volatile.Read(ref _clickVersion)) return;
+            if (!double.IsFinite(coordinates.Latitude) || !double.IsFinite(coordinates.Longitude) ||
+                Math.Abs(coordinates.Latitude) > 90 || Math.Abs(coordinates.Longitude) > 180)
+                throw new InvalidOperationException("Sou\u0159adnice WGS 84 nejsou platn\u00e9.");
 
-            if (!double.IsFinite(coordinates.Latitude) ||
-                !double.IsFinite(coordinates.Longitude) ||
-                Math.Abs(coordinates.Latitude) > 90 ||
-                Math.Abs(coordinates.Longitude) > 180)
-            {
-                throw new InvalidOperationException("Nelze získat platné souřadnice WGS 84.");
-            }
-
-            // WPF windows must be opened on the UI thread.
             await Application.Current.Dispatcher.InvokeAsync(() =>
-                Open(coordinates.Latitude, coordinates.Longitude));
+                Open(coordinates.Latitude, coordinates.Longitude, view));
         }
         catch (Exception ex)
         {
             await Application.Current.Dispatcher.InvokeAsync(() =>
-                ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
-                    ex.Message, "Panorama Viewer"));
+                ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(ex.Message, "Panorama Viewer"));
         }
     }
 
-    protected abstract void Open(double latitude, double longitude);
+    protected abstract void Open(double latitude, double longitude, MapView view);
 }
 
 internal class GoogleTool : PanoramaToolBase
 {
-    protected override void Open(double latitude, double longitude)
+    protected override void Open(double latitude, double longitude, MapView view)
     {
-        var culture = CultureInfo.InvariantCulture;
-        var lat = latitude.ToString("F7", culture);
-        var lon = longitude.ToString("F7", culture);
-        var url = $"https://www.google.com/maps/@?api=1&map_action=pano&viewpoint={lat},{lon}";
-
-        Process.Start(new ProcessStartInfo(url)
+        if (!string.IsNullOrWhiteSpace(KeyStore.Load(PanoramaProvider.Google)))
         {
-            UseShellExecute = true
-        });
+            PanoramaWindows.Show(PanoramaProvider.Google, latitude, longitude, view);
+            return;
+        }
+
+        // Preserve the working, key-free Maps URL option.
+        // A browser link cannot send live panorama position events to ArcGIS Pro.
+        PanoramaWindows.Close(PanoramaProvider.Google);
+        var lat = latitude.ToString("F7", CultureInfo.InvariantCulture);
+        var lon = longitude.ToString("F7", CultureInfo.InvariantCulture);
+        var url = $"https://www.google.com/maps/@?api=1&map_action=pano&viewpoint={lat},{lon}";
+        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
     }
 }
 
 internal class MapyTool : PanoramaToolBase
 {
-    private static PanoramaWindow? _window;
-
-    protected override void Open(double latitude, double longitude)
+    protected override void Open(double latitude, double longitude, MapView view)
     {
         if (string.IsNullOrWhiteSpace(KeyStore.Load()))
         {
             new SettingsWindow().ShowDialog();
-            if (string.IsNullOrWhiteSpace(KeyStore.Load()))
-                return;
+            if (string.IsNullOrWhiteSpace(KeyStore.Load())) return;
         }
+        PanoramaWindows.Show(PanoramaProvider.Mapy, latitude, longitude, view);
+    }
+}
 
-        if (_window == null || !_window.IsLoaded)
+internal static class PanoramaWindows
+{
+    private static PanoramaWindow? _mapy;
+    private static PanoramaWindow? _google;
+
+    internal static void Show(PanoramaProvider provider, double latitude, double longitude, MapView view)
+    {
+        var window = provider == PanoramaProvider.Mapy ? _mapy : _google;
+        if (window == null)
         {
-            _window = new PanoramaWindow();
-            _window.Closed += (_, _) => _window = null;
-            _window.Show();
+            window = new PanoramaWindow(provider);
+            var created = window;
+            if (provider == PanoramaProvider.Mapy) _mapy = created;
+            else _google = created;
+            created.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_mapy, created)) _mapy = null;
+                if (ReferenceEquals(_google, created)) _google = null;
+            };
+            created.Show();
         }
+        if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
+        window.ShowLocation(latitude, longitude, view);
+        window.Activate();
+    }
 
-        _window.Activate();
-        _window.ShowLocation(latitude, longitude);
+    internal static void Close(PanoramaProvider provider)
+    {
+        if (provider == PanoramaProvider.Mapy) _mapy?.Close();
+        else _google?.Close();
     }
 }
 
 internal class SettingsButton : Button
 {
-    protected override void OnClick()
-    {
-        new SettingsWindow().ShowDialog();
-    }
+    protected override void OnClick() => new SettingsWindow().ShowDialog();
 }

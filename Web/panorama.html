@@ -1,26 +1,98 @@
-<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mapy.com Panorama</title><style>
-html,body{height:100%;margin:0;background:#0d192b;color:#e6f0fc;font:14px 'Segoe UI',Arial,sans-serif}
-#root{position:absolute;inset:0}#hint{position:absolute;z-index:10;left:14px;top:14px;max-width:450px;background:rgba(10,25,44,.9);padding:12px 16px;border-radius:10px;box-shadow:0 4px 18px #0004}
-#hint.ok{opacity:.7}#hint.error{background:#742e34}
-</style></head><body><div id="root"></div><div id="hint">Čekám na výběr místa v ArcGIS Pro…</div>
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mapy.com Panorama</title>
+<style>
+html,body,#root{width:100%;height:100%;margin:0;overflow:hidden;background:#17202b}
+.mount{position:absolute;inset:0}
+</style>
+</head>
+<body>
+<div id="root"></div>
 <script src="https://api.mapy.com/js/panorama/v1/panorama.js"></script>
 <script>
-let active=null;let seq=0;
-const hint=document.getElementById('hint');
-function status(text,kind){hint.textContent=text;hint.className=kind||'';window.chrome?.webview?.postMessage({status:text});}
-async function loadPano(data){
- const id=++seq;
- if(active){try{active.destroy?.()}catch(e){} active=null}
- document.getElementById('root').replaceChildren();
- status('Hledám nejbližší panoramatický snímek…');
- try{
-   if(typeof Panorama==='undefined') throw new Error('Nepodařilo se načíst Mapy.com Panorama API.');
-   const pano=await Panorama.panoramaFromPosition({parent:document.getElementById('root'),lon:data.lon,lat:data.lat,apiKey:data.apiKey,radius:data.radius||80,yaw:'point',showNavigation:true,lang:'cs'});
-   if(id!==seq){pano?.destroy?.();return}
-   active=pano;
-   status('Panorama načteno. Myší se rozhlížejte, šipkami přecházejte mezi snímky.','ok');
- }catch(e){if(id===seq)status('Panorama není dostupné nebo API vrátilo chybu: '+(e?.message||String(e)),'error')}
+'use strict';
+let active = null;
+let generation = 0;
+const root = document.getElementById('root');
+function post(message) { window.chrome?.webview?.postMessage(message); }
+function report(requestId, state, message = '') { post({type:'status', requestId, state, message}); }
+
+// The API documents lon/lat for panorama info. Event wrappers are normalised
+// defensively; never fall back to the clicked point or an old panorama position.
+function readPosition(value) {
+  for (const point of [value, value?.info, value?.position, value?.coords, value?.detail, value?.data]) {
+    if (!point || typeof point !== 'object') continue;
+    const lon = point.lon ?? point.lng ?? point.longitude;
+    const lat = point.lat ?? point.latitude;
+    if (typeof lon === 'number' && typeof lat === 'number' &&
+        Number.isFinite(lon) && Number.isFinite(lat) && Math.abs(lon) <= 180 && Math.abs(lat) <= 90) {
+      return {lon,lat};
+    }
+  }
+  return null;
 }
-window.chrome?.webview?.addEventListener('message',e=>{if(e.data?.type==='location')loadPano(e.data)});
-</script></body></html>
+function position(requestId, value) {
+  const point = readPosition(value);
+  if (point) post({type:'position', requestId, ...point});
+  else post({type:'position-unavailable', requestId});
+}
+function safeDestroy(panorama) { try { panorama?.destroy?.(); } catch (_) {} }
+function friendlyError(code) {
+  switch (code) {
+    case 'PANORAMA_NOT_FOUND': return 'V okol\u00ed vybran\u00e9ho bodu nen\u00ed dostupn\u00e9 panorama.';
+    case 'MISSING_API_KEY':
+    case 'WRONG_API_KEY': return 'Mapy.com odm\u00edtly API kl\u00ed\u010d. Zkontrolujte Nastaven\u00ed a omezen\u00ed kl\u00ed\u010de.';
+    default: return 'Panoramu nelze na\u010d\u00edst. Zkontrolujte internet, API kl\u00ed\u010d a jeho kv\u00f3tu.';
+  }
+}
+async function loadPano(data) {
+  const id = ++generation;
+  const requestId = data.requestId;
+  safeDestroy(active);
+  active = null;
+  root.replaceChildren();
+  const mount = document.createElement('div');
+  mount.className = 'mount';
+  root.appendChild(mount);
+  report(requestId, 'loading', 'Hled\u00e1m nejbli\u017e\u0161\u00ed panorama\u2026');
+  try {
+    if (!readPosition(data)) throw new Error('Invalid coordinates');
+    if (typeof Panorama === 'undefined') throw new Error('Library unavailable');
+    const panorama = await Panorama.panoramaFromPosition({
+      parent:mount, lon:data.lon, lat:data.lat, apiKey:data.apiKey,
+      radius:data.radius || 80, yaw:'point', showNavigation:true, lang:'cs'
+    });
+    if (id !== generation) { safeDestroy(panorama); mount.remove(); return; }
+    if (!panorama || (panorama.errorCode && panorama.errorCode !== 'NONE') || panorama.error) {
+      safeDestroy(panorama);
+      mount.remove();
+      report(requestId, 'error', friendlyError(panorama?.errorCode));
+      return;
+    }
+    active = panorama;
+    report(requestId, 'ready');
+    position(requestId, panorama.info);
+    panorama.addListener('pano-place', place => {
+      if (id === generation && active === panorama) {
+        // Actual location returned by the panorama, not the initial mouse click.
+        report(requestId, 'ready');
+        position(requestId, place);
+      }
+    });
+  } catch (_) {
+    if (id !== generation) { mount.remove(); return; }
+    safeDestroy(active); active = null; mount.remove();
+    report(requestId, 'error', friendlyError());
+  }
+}
+window.chrome?.webview?.addEventListener('message', event => {
+  if (event.data?.type === 'location') void loadPano(event.data);
+});
+window.addEventListener('pagehide', () => { ++generation; safeDestroy(active); active = null; });
+post({type:'ready'});
+</script>
+</body>
+</html>

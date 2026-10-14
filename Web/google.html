@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Google Street View</title>
+<style>html,body,#root{width:100%;height:100%;margin:0;overflow:hidden;background:#17202b}</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+'use strict';
+let panorama = null;
+let service = null;
+let loadingApi = null;
+let loadedKey = null;
+let generation = 0;
+let currentRequestId = null;
+let acceptingPositions = false;
+let authFailed = false;
+const root = document.getElementById('root');
+function post(message) { window.chrome?.webview?.postMessage(message); }
+function report(requestId, state, message = '') { post({type:'status', requestId, state, message}); }
+function validPoint(lat,lon) {
+  return typeof lat === 'number' && typeof lon === 'number' &&
+    Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
+}
+function reportPosition(requestId, position) {
+  const lat = position?.lat();
+  const lon = position?.lng();
+  if (validPoint(lat,lon)) post({type:'position',requestId,lat,lon});
+  else post({type:'position-unavailable',requestId});
+}
+window.gm_authFailure = () => {
+  authFailed = true;
+  acceptingPositions = false;
+  if (currentRequestId !== null)
+    report(currentRequestId,'error','Google odm\u00edtl API kl\u00ed\u010d. Zkontrolujte Maps JavaScript API, fakturaci a povolen\u00e9 weby.');
+};
+function ensureGoogle(key) {
+  if (loadingApi) return loadingApi;
+  loadedKey = key;
+  loadingApi = new Promise((resolve,reject) => {
+    const script = document.createElement('script');
+    const timer = setTimeout(() => reject(new Error('API timeout')), 25000);
+    window.panoramaGoogleReady = () => {
+      clearTimeout(timer);
+      if (window.google?.maps?.StreetViewPanorama) resolve();
+      else reject(new Error('API unavailable'));
+    };
+    script.async = true;
+    script.onerror = () => { clearTimeout(timer); reject(new Error('API load error')); };
+    script.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(key) +
+      '&callback=panoramaGoogleReady&loading=async&v=quarterly&language=cs';
+    document.head.appendChild(script);
+  });
+  return loadingApi;
+}
+function createViewer() {
+  if (panorama) return;
+  service = new google.maps.StreetViewService();
+  panorama = new google.maps.StreetViewPanorama(root, {
+    visible:false, addressControl:true, linksControl:true, clickToGo:true,
+    panControl:true, zoomControl:true, fullscreenControl:true,
+    enableCloseButton:false, motionTracking:false, motionTrackingControl:false
+  });
+  // Keep Google's built-in attribution, copyrights, controls and links visible.
+  panorama.addListener('position_changed', () => {
+    if (!acceptingPositions || currentRequestId === null || authFailed) return;
+    const actualPosition = panorama.getLocation()?.latLng || panorama.getPosition();
+    reportPosition(currentRequestId, actualPosition);
+  });
+  panorama.addListener('status_changed', () => {
+    if (!acceptingPositions || currentRequestId === null || authFailed) return;
+    if (panorama.getStatus() === google.maps.StreetViewStatus.OK) {
+      report(currentRequestId,'ready');
+      reportPosition(currentRequestId, panorama.getLocation()?.latLng || panorama.getPosition());
+    } else {
+      report(currentRequestId,'error','Na tomto m\u00edst\u011b nen\u00ed dostupn\u00e9 Google Street View.');
+    }
+  });
+  window.addEventListener('resize', () => google.maps.event.trigger(panorama,'resize'));
+}
+function heading(from, target) {
+  const rad = Math.PI / 180;
+  const a = from.lat() * rad;
+  const b = target.lat * rad;
+  const d = (target.lon - from.lng()) * rad;
+  const y = Math.sin(d) * Math.cos(b);
+  const x = Math.cos(a) * Math.sin(b) - Math.sin(a) * Math.cos(b) * Math.cos(d);
+  return (Math.atan2(y,x) / rad + 360) % 360;
+}
+async function loadPano(data) {
+  const id = ++generation;
+  currentRequestId = data.requestId;
+  acceptingPositions = false;
+  report(data.requestId,'loading','Hled\u00e1m nejbli\u017e\u0161\u00ed Google Street View\u2026');
+  if (loadedKey !== null && loadedKey !== data.apiKey) {
+    // A Maps JS key is bound to the page instance; reload on key changes.
+    // The host will resend the latest request after the ready handshake.
+    window.location.reload();
+    return;
+  }
+  try {
+    if (!validPoint(data.lat,data.lon) || !data.apiKey) throw new Error('Invalid request');
+    await ensureGoogle(data.apiKey);
+    if (id !== generation) return;
+    if (authFailed) { window.gm_authFailure(); return; }
+    createViewer();
+    const response = await service.getPanorama({
+      location:{lat:data.lat,lng:data.lon}, radius:data.radius || 80,
+      preference:google.maps.StreetViewPreference.NEAREST
+    });
+    if (id !== generation || authFailed) return;
+    const location = response.data?.location;
+    if (!location?.pano || !location.latLng) throw new Error('Missing panorama');
+    panorama.setPano(location.pano);
+    panorama.setPov({heading:heading(location.latLng,data),pitch:0});
+    panorama.setVisible(true);
+    acceptingPositions = true;
+    report(data.requestId,'ready');
+    reportPosition(data.requestId, location.latLng);
+  } catch (_) {
+    if (id !== generation || authFailed) return;
+    acceptingPositions = false;
+    panorama?.setVisible(false);
+    report(data.requestId,'error','Street View se nepoda\u0159ilo na\u010d\u00edst. M\u016f\u017ee chyb\u011bt sn\u00edmek, p\u0159ipojen\u00ed nebo opr\u00e1vn\u011bn\u00ed API.');
+  }
+}
+window.chrome?.webview?.addEventListener('message', event => {
+  if (event.data?.type === 'location') void loadPano(event.data);
+});
+window.addEventListener('pagehide', () => { ++generation; acceptingPositions = false; });
+post({type:'ready'});
+</script>
+</body>
+</html>
