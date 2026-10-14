@@ -17,7 +17,7 @@ Pro zobrazení panoramat je API klíč Mapy.com povinný. Je možné jej získá
 Panoramata se zobrazují ve vlastním okně přes JS Panorama API.
 ## Google Street View – API klíč
 
-Pro Street View ve vlastním okně a se synchronizací polohy je potřeba samostatný Google API klíč. V Google Cloud Console vytvořte nebo vyberte projekt, aktivujte Maps JavaScript API, připojte fakturační účet a vytvořte API klíč. U tohoto API klíče je nutné vyplnit údaje v Billing.
+Pro Street View ve vlastním okně a se synchronizací polohy je potřeba samostatný Google API klíč. V Google Cloud Console vytvořte nebo vyberte projekt, aktivujte Maps JavaScript API, připojte fakturační účet a vytvořte API klíč. U tohoto API klíče je nutné vyplnit údaje v Billing. [Návod na získání API klíče](https://developers.google.com/maps/documentation/javascript/get-api-key).
 
 Bez Google API klíče se Street View otevře v běžném prohlížeči, bez zpětné synchronizace polohy. 
 
