@@ -8,7 +8,7 @@
 - API klíč lze opakovaně změnit v Nastavení; je šifrován pomocí Windows DPAPI pro aktuálního uživatele.
 
 ## Požadavky
-- ArcGIS Pro **3.7** (Windows 11)
+- ArcGIS Pro **3.7**
 - **Visual Studio 2026 v18.4.1+**, .NET **10 SDK**, ArcGIS Pro SDK / Esri NuGet **3.7.0.1901**
 - WebView2 Runtime, přístup k api.mapy.com a Google Maps
 - API klíč Mapy.com s povolenou příslušnou službou a případnými doménovými omezeními odpovídajícími integraci
