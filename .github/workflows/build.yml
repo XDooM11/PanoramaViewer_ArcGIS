@@ -1,0 +1,46 @@
+name: Build Panorama Viewer
+ 
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+ 
+permissions:
+  contents: read
+ 
+jobs:
+  build:
+    runs-on: windows-latest
+ 
+    steps:
+      - name: Download source code
+        uses: actions/checkout@v4
+ 
+      - name: Install .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+ 
+      - name: Restore dependencies
+        run: dotnet restore PanoramaViewer/PanoramaViewer.csproj
+ 
+      - name: Build Panorama Viewer
+        run: dotnet build PanoramaViewer/PanoramaViewer.csproj --configuration Release --no-restore
+ 
+      - name: Find ArcGIS Pro add-in
+        shell: pwsh
+        run: |
+          $items = @(Get-ChildItem -Path PanoramaViewer -Recurse -Filter '*.esriAddInX' -File)
+          if ($items.Count -eq 0) {
+            Write-Error 'No installable .esriAddInX was generated.'
+            exit 1
+          }
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item $items[0].FullName dist/PanoramaViewer.esriAddInX
+ 
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: PanoramaViewer-ArcGISPro-3.7
+          path: dist/PanoramaViewer.esriAddInX
+          if-no-files-found: error
