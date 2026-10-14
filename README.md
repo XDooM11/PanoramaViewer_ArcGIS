@@ -23,7 +23,7 @@ Bez Google API klíče se Street View otevře v běžném prohlížeči, bez zp�
 
 ## Správa klíčů
 
-Klíče lze kdykoliv změnit v **Panorama - Nastavení**. Uložení prázdného pole příslušný klíč odstraní; změna se projeví při dalším kliknutí do mapy.
+Klíče lze kdykoliv změnit v **Panorama - Nastavení**. Uložení prázdného pole příslušný klíč odstraní. Změna se projeví při dalším kliknutí do mapy.
 
 - Integrovaná okna používají virtuální adresu `https://panorama.local/`. Případná doménová omezení musí tento host povolit; u Google nastavte webové omezení `https://panorama.local/` a API omezení na Maps JavaScript API.
 
