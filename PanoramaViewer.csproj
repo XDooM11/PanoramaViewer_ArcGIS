@@ -16,7 +16,7 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2739.15" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="Config.daml" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Config.daml" />
     <Content Include="Assets\*.png" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Web\*.html" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
