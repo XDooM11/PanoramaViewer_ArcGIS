@@ -32,6 +32,6 @@ Synchronizace je navržena pro 2D mapy, nikoli 3D Scene.
 ## Nové ve verzi 1.2
 
 - Tečka: 85% krytí. Výseč: 30% krytí, jemný obrys a středová čára.
-- Délka reaguje na měřítko mapy (cíl přibližně 48 obrazových bodů, obvykle 5-20 m). Při extrémním přiblížení dostává přednost omezení na obrazovce; při velkém oddálení se uplatní maximum 20 m.
-- Směr a FOV se přebírají z panoramatu; u Google se FOV odvozuje ze zoomu.
-- Další kliknutí na právě aktivní tlačítko  přepne mapu na Explore
+- Délka reaguje na měřítko mapy (cíl přibližně 48 obrazových bodů, obvykle 5-20 m). Při extrémním přiblížení dostává přednost omezení na obrazovce. Při velkém oddálení se uplatní maximum 20 m.
+- Směr a FOV se přebírají z panoramatu.
+- Další kliknutí na právě aktivní tlačítko přepne mapu na Explore
