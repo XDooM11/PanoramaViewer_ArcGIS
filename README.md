@@ -43,47 +43,45 @@ Synchronizace je navržena pro 2D mapy, nikoli 3D Scene.
 EN VERSION
 # Panorama Viewer 1.2 – ArcGIS Pro 3.7
 
-An add-in for opening Google Street View and Mapy.com Panorama at a location selected on the map.
+An add-in for opening Google Street View and Mapy.com Panorama based on a location selected on the map.
 
 ## Installation and Usage
 
-Requires ArcGIS Pro 3.7, an internet connection, and Microsoft Edge WebView2 Runtime. With ArcGIS Pro closed, double-click `PanoramaViewer.esriAddInX` to install the add-in, then restart the application. The ZIP file containing the source code is not an installer.
+The installer file `PanoramaViewer.esriAddInX` is available in the **Releases** section and directly in the repository under the **Installer** folder.
 
-On the **Panorama** tab, open **Settings**, enter the required API keys, and save them. Then select Google Street View or Mapy.com Panorama and click on the map.
+ArcGIS Pro 3.7, an internet connection, and Microsoft Edge WebView2 Runtime are required. With ArcGIS Pro closed, double-click `PanoramaViewer.esriAddInX` to install the add-in, then restart the application.
 
-Google Street View also works without an API key. However, without a key, Street View opens in the default web browser instead of a separate window, unlike Mapy.com Panorama.
+Open **Settings** in the **Panorama** tab, enter the required API keys, and save them. Then select Google Street View or Mapy.com Panorama and click on the map. Google Street View also works without an API key; however, without a key, Street View opens in a web browser rather than in a separate window, as Mapy.com Panorama does.
 
-The standalone panorama windows support location synchronization with the 2D map: a blue marker for Mapy.com and an orange marker for Google Street View. The marker disappears when the window is closed. The map, its coordinate system, and the source layers remain unchanged.
+The standalone panorama windows support location synchronization with the 2D map: a blue point for Mapy.com and an orange point for Google. The point disappears when the window is closed. The map, its coordinate system, and the source layers remain unchanged.
 
 ## Mapy.com Panorama – API Key
 
-An API key is required to display Mapy.com panoramas. You can obtain one by creating a project on the [Mapy.com Developer Portal](https://developer.mapy.com/).
+An API key is required to display Mapy.com panoramas. You can obtain one by creating a project on the [Mapy.com developer portal](https://developer.mapy.com/).
 
-For details, see the [API Key Setup Guide](https://developer.mapy.com/rest-api-mapy-cz/how-to-start/).
+For details, see the [API key setup guide](https://developer.mapy.com/rest-api-mapy-cz/how-to-start/).
 
 Panoramas are displayed in a separate window using the JS Panorama API.
 
 ## Google Street View – API Key
 
-A separate Google API key is required to display Street View in a standalone window with location synchronization.
+A separate Google API key is required to display Street View in a standalone window with location synchronization. In the Google Cloud Console, create or select a project, enable the Maps JavaScript API, link a billing account, and create an API key. Billing must be configured for this API.
 
-In the Google Cloud Console, create or select a project, enable the Maps JavaScript API, link a billing account, and create an API key. Billing must be configured for this API key.
+For details, see the [Google API key setup guide](https://developers.google.com/maps/documentation/javascript/get-api-key).
 
-For details, see the [Google Maps JavaScript API Key Setup Guide](https://developers.google.com/maps/documentation/javascript/get-api-key).
-
-Without a Google API key, Street View opens in the default web browser without location synchronization back to the map.
+Without a Google API key, Street View opens in a regular web browser without location synchronization back to the map.
 
 ## Managing API Keys
 
-API keys can be changed at any time under **Panorama → Settings**. Saving an empty field removes the corresponding key. Changes take effect the next time you click on the map.
+API keys can be changed at any time under **Panorama – Settings**. Saving an empty field removes the corresponding key. Changes take effect the next time you click on the map.
 
-- The embedded windows use the virtual address `https://panorama.local/`. Any domain restrictions must allow this host. For Google, configure the HTTP referrer restriction to allow `https://panorama.local/` and restrict API access to the Maps JavaScript API.
+- The embedded windows use the virtual address `https://panorama.local/`. Any domain restrictions must allow this host. For Google, configure the website restriction as `https://panorama.local/` and restrict the API key to the Maps JavaScript API.
 
 Location synchronization is designed for 2D maps, not 3D scenes.
 
 ## What's New in Version 1.2
 
-- **Updated location indicator:** The central dot has 85% opacity. The directional sector has 30% opacity, a subtle outline, and a centerline.
-- **Scale-dependent sector length:** The sector length adapts to the map scale, targeting approximately 48 screen pixels and typically representing 5–20 meters. At extreme zoom levels, on-screen constraints take priority. When zoomed out, the sector length is capped at 20 meters.
-- **Panorama orientation and field of view:** The direction and FOV are taken from the panorama.
-- **Quick switch to Explore:** Clicking the currently active button again switches the map to Explore mode.
+- Updated location symbol: the dot has 85% opacity. The directional sector has 30% opacity, a subtle outline, and a center line.
+- The sector length responds to the map scale (targeting approximately 48 screen pixels, typically 5–20 m). At extreme zoom levels, screen-space constraints take priority. When zoomed far out, a maximum length of 20 m applies.
+- Heading and field of view (FOV) are taken from the panorama.
+- Clicking the currently active button again switches the map back to Explore mode.
