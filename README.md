@@ -5,6 +5,8 @@ Doplněk pro otevření Google Street View a Mapy.com Panorama podle místa vybr
 
 ## Instalace a použití
 
+Instalační soubor 'PanoramaViewer.esriAddInX' je dostupný v sekci **Releases** a také přímo v repozítáři ve složce **Installer**. Dvojklikem na stažený soubor nainstalujete doplněk, spusťte ArcGIS Pro a doplněk otestujte.
+
 Vyžaduje ArcGIS Pro 3.7, připojení k internetu a Microsoft Edge WebView2 Runtime. Při zavřeném ArcGIS Pro nainstalujte dvojklikem soubor `PanoramaViewer.esriAddInX` a aplikaci znovu spusťte. ZIP se zdrojovým kódem není instalátor.
 
 V záložce **Panorama** otevřete Nastavení, zadejte potřebné API klíče a uložte je. Potom vyberte Google Street View nebo Mapy.com Panorama a klikněte do mapy. Google Street View funguje i bez API klíče, ovšem bez tohoto klíče se otevře streetview v prohlížeči a nikoliv v samostatném okně tak, jako je to v případě panoramy z mapy.com
