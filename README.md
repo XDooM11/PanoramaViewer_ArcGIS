@@ -12,7 +12,7 @@ Ve vlastních panoramatických oknech je připravena synchronizace polohy s 2D m
 
 ## Mapy.com Panorama – API klíč
 
-Pro zobrazení panoramat je API klíč Mapy.com povinný. Je možné jej získá vytvořením projektu na portálu developer.mapy.com Podrobnosti: [projekty a API klíče](https://developer.mapy.com/rest-api-mapy-cz/how-to-start/).
+Pro zobrazení panoramat je API klíč Mapy.com povinný. Je možné jej získá vytvořením projektu na portálu developer.mapy.com Podrobnosti: [Návod na získání API klíče](https://developer.mapy.com/rest-api-mapy-cz/how-to-start/).
 
 Panoramata se zobrazují ve vlastním okně přes JS Panorama API.
 ## Google Street View – API klíč
