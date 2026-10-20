@@ -43,7 +43,7 @@ Synchronizace je navržena pro 2D mapy, nikoli 3D Scene.
 EN VERSION
 # Panorama Viewer 1.2 – ArcGIS Pro 3.7
 
-An add-in for opening Google Street View and Mapy.com Panorama based on a location selected on the map.
+An add-in for viewing Google Street View and Mapy.com panoramas by clicking a location on the map in ArcGIS.
 
 ## Installation and Usage
 
